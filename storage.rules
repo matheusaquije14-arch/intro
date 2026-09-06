@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.categoria == 'administrador';
+    }
+    function under(sizeMb) { return request.resource.size < sizeMb * 1024 * 1024; }
+
+    // Evidencias fotográficas de asistencia: carpeta propia del usuario.
+    match /evidencias/{uid}/{file} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow write: if request.auth.uid == uid && under(5)
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Justificaciones con evidencias: carpeta propia del usuario.
+    match /justificaciones/{uid}/{file} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow write: if request.auth.uid == uid && under(10);
+    }
+
+    // Documentación institucional: solo administradores.
+    match /documentos/{file} {
+      allow read: if isSignedIn();
+      allow write, delete: if isAdmin() && under(20);
+    }
+  }
+}
